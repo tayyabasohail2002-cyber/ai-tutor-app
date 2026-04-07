@@ -1,0 +1,30 @@
+name: ai_tutor_app
+description: Frontend UI for AI Tutor App
+publish_to: "none"
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  file_picker: ^8.0.0
+  google_fonts: ^6.2.1
+  dio: ^5.9.1
+  shared_preferences: ^2.2.0
+  audioplayers: ^5.2.1
+  audio_video_progress_bar: ^1.0.1
+  glassmorphism: ^3.0.0
+  video_player: ^2.8.2
+  share_plus: ^7.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/logo.png
