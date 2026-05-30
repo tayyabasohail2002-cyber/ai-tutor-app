@@ -1,4 +1,4 @@
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
 📌 Overview
 
 AI Tutor App is an intelligent learning platform that converts any topic into a complete learning experience  including script, voice explanation, and video tutor output.
