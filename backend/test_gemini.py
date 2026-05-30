@@ -1,14 +1,14 @@
+from google import genai
 import os
-import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path="../.env")
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-url = f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="Explain what is AI in simple words"
+)
 
-response = requests.get(url)
-
-print("Status Code:", response.status_code)
-print("Response:", response.text)
+print(response.text)

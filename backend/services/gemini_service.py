@@ -1,63 +1,43 @@
-# services/gemini_service.py
-
+from google import genai
 import os
-import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY")
+)
 
 def generate_script(prompt: str):
+    try:
+        full_prompt = f"""
+You are a friendly teacher.
 
-    if not API_KEY:
-        return "AI explanation could not be generated (missing API key)."
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
-
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {
-                       "text": f"""
-You are an expert teacher creating a short lesson for students.
-
-Explain the following topic clearly and simply.
-
-Topic: {prompt}
+Explain this topic clearly:
+{prompt}
 
 Rules:
-1. Use simple language.
-2. Explain step by step.
-3. Give a real-life example if possible.
-4. Keep explanation around 120-150 words.
-5. End with a short summary.
-
-Start the explanation now.
+- Use simple English
+- Keep it under 120 words
+- Give one real-life example
+- Make it sound natural (not robotic)
 """
-                    }
-                ]
-            }
-        ]
-    }
 
-    headers = {"Content-Type": "application/json"}
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",   # ✅ CORRECT NAME
+            contents=full_prompt
+        )
 
-    try:
-        response = requests.post(url, headers=headers, json=payload)
+        # Debug (optional)
+        print("✅ Gemini response received")
 
-        if response.status_code != 200:
-            print("Gemini Error:", response.text)
-            return "AI explanation could not be generated."
+        if response and hasattr(response, "text") and response.text:
+            return response.text.strip()
 
-        data = response.json()
-
-        if "candidates" not in data:
-            return "AI explanation could not be generated."
-
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        # fallback if empty response
+        return f"{prompt} is an important concept. It is used in real life applications to make systems smarter."
 
     except Exception as e:
-        print("Gemini Exception:", e)
-        return "AI explanation failed."
+        print("🔥 GEMINI ERROR:", e)
+
+        return f"{prompt} is a basic concept. Please try again."

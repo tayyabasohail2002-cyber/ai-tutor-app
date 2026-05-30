@@ -1,13 +1,21 @@
 import 'dart:math';
 import 'dart:ui';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
+
 import '../routes.dart';
 import '../services/tutor_service.dart';
 
+/// 🔗 BASE URL
+final String baseUrl =
+    kIsWeb ? "http://localhost:8000" : "http://192.168.1.10:8000";
+
 class AudioScreen extends StatefulWidget {
   final int videoId;
+
   const AudioScreen({super.key, required this.videoId});
 
   @override
@@ -45,17 +53,27 @@ class _AudioScreenState extends State<AudioScreen>
           ..repeat();
   }
 
-  // ================= GENERATE AUDIO =================
+  /// ================= GENERATE AUDIO =================
   Future<void> generateAudio() async {
     final result = await _service.generateAudio(widget.videoId);
-    if (result != null) {
-      audioUrl = "http://localhost:8000${result["audio_path"]}";
+
+    if (result != null && result["audio_path"] != null) {
+      final rawPath = result["audio_path"];
+
+      audioUrl = rawPath.startsWith("http")
+          ? rawPath
+          : "$baseUrl$rawPath";
+
+      print("🎧 Audio URL: $audioUrl");
+
       setState(() => loading = false);
     }
   }
 
-  // ================= PLAY / PAUSE =================
-  void togglePlay() async {
+  /// ================= PLAY / PAUSE =================
+  Future<void> togglePlay() async {
+    if (audioUrl == null) return;
+
     if (isPlaying) {
       await _player.pause();
       _mouthController.stop();
@@ -63,11 +81,11 @@ class _AudioScreenState extends State<AudioScreen>
       await _player.play(UrlSource(audioUrl!));
       _mouthController.repeat(reverse: true);
     }
+
     setState(() => isPlaying = !isPlaying);
   }
 
-  // ================= UPLOAD IMAGE + GENERATE VIDEO =================
-  // ================= UPLOAD IMAGE + GENERATE VIDEO =================
+  /// ================= UPLOAD IMAGE + GENERATE VIDEO =================
   Future<void> goToVideo() async {
     FilePickerResult? result =
         await FilePicker.platform.pickFiles(type: FileType.image);
@@ -76,18 +94,29 @@ class _AudioScreenState extends State<AudioScreen>
 
     final file = result.files.single;
 
-    if (file.bytes == null) {
-      print("❌ File bytes are null");
+    List<int>? bytes;
+
+    /// ✅ WEB
+    if (kIsWeb) {
+      bytes = file.bytes;
+    }
+    /// ✅ MOBILE
+    else {
+      bytes = await File(file.path!).readAsBytes();
+    }
+
+    if (bytes == null) {
+      print("❌ File bytes null");
       return;
     }
 
     setState(() => generatingVideo = true);
 
     try {
-      // 1️⃣ Upload image
+      /// 1️⃣ Upload Image
       final uploadResult = await _service.uploadImageWeb(
         widget.videoId,
-        file.bytes!,
+        bytes,
         file.name,
       );
 
@@ -99,26 +128,30 @@ class _AudioScreenState extends State<AudioScreen>
 
       print("✅ Image uploaded");
 
-      // 2️⃣ Generate video
+      /// 2️⃣ Generate Video
       final videoResult = await _service.generateVideo(widget.videoId);
 
       setState(() => generatingVideo = false);
 
-      if (videoResult == null) {
+      if (videoResult == null || videoResult["video_path"] == null) {
         print("❌ Video generation failed");
         return;
       }
 
-      print("VIDEO RESULT: $videoResult");
+      String videoUrl = videoResult["video_path"];
 
-      if (videoResult["video_path"] == null) {
-        print("❌ video_path is null");
-        return;
+      /// 🔥 FIX: clean broken URL (important)
+      if (videoUrl.contains("http://localhost") &&
+          videoUrl.contains("https://")) {
+        videoUrl = videoUrl.substring(videoUrl.indexOf("https://"));
       }
 
-      final videoUrl = "http://localhost:8000${videoResult["video_path"]}";
+      /// fallback if relative
+      if (!videoUrl.startsWith("http")) {
+        videoUrl = "$baseUrl$videoUrl";
+      }
 
-      print("✅ Final Video URL: $videoUrl");
+      print("🎬 FINAL VIDEO URL: $videoUrl");
 
       Navigator.pushNamed(
         context,
@@ -126,7 +159,7 @@ class _AudioScreenState extends State<AudioScreen>
         arguments: {"videoUrl": videoUrl},
       );
     } catch (e) {
-      print("🚨 ERROR in goToVideo(): $e");
+      print("🚨 ERROR: $e");
       setState(() => generatingVideo = false);
     }
   }
@@ -159,14 +192,11 @@ class _AudioScreenState extends State<AudioScreen>
               },
               child: Stack(
                 children: [
-                  /// 🔵 BACKGROUND
+                  /// 🌈 BACKGROUND
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [
-                          Color(0xFFB3D4FF),
-                          Color(0xFFEAF3FF),
-                        ],
+                        colors: [Color(0xFFB3D4FF), Color(0xFFEAF3FF)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -197,8 +227,8 @@ class _AudioScreenState extends State<AudioScreen>
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                           child: Container(
-                            width: 330,
-                            padding: const EdgeInsets.all(30),
+                            width: 320,
+                            padding: const EdgeInsets.all(25),
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.6),
                               borderRadius: BorderRadius.circular(30),
@@ -210,18 +240,17 @@ class _AudioScreenState extends State<AudioScreen>
                                 Stack(
                                   alignment: Alignment.center,
                                   children: [
-                                    Image.asset("assets/logo.png", height: 120),
+                                    Image.asset("assets/logo.png", height: 110),
                                     Positioned(
                                       bottom: 25,
                                       child: AnimatedBuilder(
                                         animation: _mouthController,
                                         builder: (_, __) {
                                           return Container(
-                                            width: 30,
+                                            width: 28,
                                             height: isPlaying
                                                 ? 5 +
-                                                    (_mouthController.value *
-                                                        10)
+                                                    (_mouthController.value * 10)
                                                 : 5,
                                             decoration: BoxDecoration(
                                               color: Colors.blueAccent,
@@ -235,13 +264,13 @@ class _AudioScreenState extends State<AudioScreen>
                                   ],
                                 ),
 
-                                const SizedBox(height: 30),
+                                const SizedBox(height: 25),
 
                                 /// ▶ PLAY BUTTON
                                 GestureDetector(
                                   onTap: togglePlay,
                                   child: Container(
-                                    padding: const EdgeInsets.all(18),
+                                    padding: const EdgeInsets.all(16),
                                     decoration: const BoxDecoration(
                                       shape: BoxShape.circle,
                                       gradient: LinearGradient(
@@ -250,27 +279,20 @@ class _AudioScreenState extends State<AudioScreen>
                                           Color(0xFF5CA9FF)
                                         ],
                                       ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.blueAccent,
-                                          blurRadius: 20,
-                                          spreadRadius: 3,
-                                        )
-                                      ],
                                     ),
                                     child: Icon(
                                       isPlaying
                                           ? Icons.pause
                                           : Icons.play_arrow,
                                       color: Colors.white,
-                                      size: 35,
+                                      size: 30,
                                     ),
                                   ),
                                 ),
 
-                                const SizedBox(height: 30),
+                                const SizedBox(height: 25),
 
-                                /// 🎬 GENERATE VIDEO BUTTON
+                                /// 🎬 GENERATE VIDEO
                                 generatingVideo
                                     ? const CircularProgressIndicator()
                                     : ElevatedButton(
@@ -279,16 +301,14 @@ class _AudioScreenState extends State<AudioScreen>
                                           backgroundColor: Colors.blueAccent,
                                           shape: RoundedRectangleBorder(
                                             borderRadius:
-                                                BorderRadius.circular(30),
+                                                BorderRadius.circular(25),
                                           ),
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 40, vertical: 14),
+                                              horizontal: 30, vertical: 12),
                                         ),
                                         child: const Text(
-                                          "Upload Image & Generate Video",
-                                          style: TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold),
+                                          "Generate Video",
+                                          style: TextStyle(color: Colors.white),
                                         ),
                                       ),
                               ],
@@ -308,6 +328,7 @@ class _AudioScreenState extends State<AudioScreen>
 /// 🌟 PARTICLES
 class ParticlePainter extends CustomPainter {
   final double progress;
+
   ParticlePainter(this.progress);
 
   @override
@@ -317,6 +338,7 @@ class ParticlePainter extends CustomPainter {
     for (int i = 0; i < 20; i++) {
       final x = (size.width * (i / 20)) + sin(progress * 2 * pi + i) * 20;
       final y = size.height * progress;
+
       canvas.drawCircle(Offset(x, y % size.height), 4, paint);
     }
   }

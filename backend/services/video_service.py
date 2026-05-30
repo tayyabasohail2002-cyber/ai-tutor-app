@@ -1,28 +1,48 @@
-import subprocess
-import uuid
+import requests
+import time
 import os
 
-def generate_video(image_path, audio_path):
-    filename = f"{uuid.uuid4()}.mp4"
-    output_path = os.path.join("media/videos", filename)
+DID_API_KEY = os.getenv("DID_API_KEY")
 
-    command = [
-        "ffmpeg",
-        "-y",
-        "-loop", "1",
-        "-i", image_path,
-        "-i", audio_path,
-        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-        "-c:v", "libx264",
-        "-tune", "stillimage",
-        "-pix_fmt", "yuv420p",
-        "-r", "30",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-shortest",
-        output_path
-    ]
+def generate_video(image_url, audio_url):
 
-    subprocess.run(command, check=True)
+    url = "https://api.d-id.com/talks"
 
-    return filename   # ✅ RETURN ONLY FILENAME
+    headers = {
+        "Authorization": f"Basic {DID_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "source_url": image_url,
+        "script": {
+            "type": "audio",
+            "audio_url": audio_url
+        }
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+
+    print("D-ID RESPONSE:", response.text)
+
+    if response.status_code != 201:
+        raise Exception(response.text)
+
+    talk_id = response.json()["id"]
+
+    # ⏳ Wait until video ready
+    while True:
+        status_res = requests.get(
+            f"https://api.d-id.com/talks/{talk_id}",
+            headers=headers
+        )
+
+        data = status_res.json()
+
+        if data["status"] == "done":
+            return data["result_url"]
+
+        elif data["status"] == "error":
+            raise Exception(data)
+
+        time.sleep(3)

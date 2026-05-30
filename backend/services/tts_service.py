@@ -1,17 +1,34 @@
 import edge_tts
+import asyncio
 import os
-import uuid
+from services.cloudinary_service import upload_audio
 
-async def generate_audio(script_text: str, gender: str):
+async def generate_audio(text: str, gender: str):
+    try:
+        print("🔊 Generating audio with Edge TTS...")
 
-    voice = "en-US-GuyNeural" if gender == "male" else "en-US-JennyNeural"
+        file_path = "audio.mp3"
 
-    os.makedirs("media/audio", exist_ok=True)
+        # ✅ Select voice based on gender
+        if gender == "male":
+            voice = "en-US-GuyNeural"
+        else:
+            voice = "en-US-JennyNeural"
 
-    filename = f"{uuid.uuid4()}.mp3"
-    path = os.path.join("media/audio", filename)
+        communicate = edge_tts.Communicate(text, voice)
+        await communicate.save(file_path)
 
-    communicate = edge_tts.Communicate(script_text, voice)
-    await communicate.save(path)
+        print("✅ Audio file created")
 
-    return f"/media/audio/{filename}"
+        # ✅ Upload to cloudinary
+        audio_url = upload_audio(file_path)
+
+        print("✅ Uploaded:", audio_url)
+
+        os.remove(file_path)
+
+        return audio_url
+
+    except Exception as e:
+        print("🔥 AUDIO ERROR:", e)
+        return None
